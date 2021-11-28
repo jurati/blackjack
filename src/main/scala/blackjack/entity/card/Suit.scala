@@ -1,4 +1,4 @@
-package blackjack.entity
+package blackjack.entity.card
 
 sealed trait Suit {
   def name: String
