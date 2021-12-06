@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name = "viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSockets</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+</head>
+<body>
+    <button id="start-btn">Start Game</button>
+    <table id="dealer">
+        <tr>
+            <td><img src="https://www.pngall.com/wp-content/uploads/2016/05/Trollface-PNG.png" height="200"></td>
+            <td id="dealer-cards">cards</td>
+        </tr>
+    </table>
+    <table id="players"></table>
+    <button id="hit-btn">Hit</button>
+    <button id="stand-btn">Stand</button>
+</body>
+<script>
+    const ws = new WebSocket("ws://127.0.0.1:9001/blackjack");
+
+     ws.addEventListener('message', (event) => {
+        render(event.data);
+    });
+
+    function render(gameState) {
+        $('#players').html('')
+        let state = JSON.parse(gameState);
+                console.log(state);
+
+        let dealer = state[0];
+        let players = state[1]
+        let dealerCardsString = $.map (dealer.hand.cards, function(val, i) {
+            return val.rank.symbol + " " + val.suit.name;
+        });
+
+        $('#dealer-cards').text(dealerCardsString.join(", "))
+
+        for (const [id, player] of Object.entries(players)) {
+            let playerCardsString = $.map (player.hand.cards, function(val, i) {
+                return val.rank.symbol + " " + val.suit.name;
+            });
+            $('#players').append(`<tr><td data-uuid='${id}'>${id}</td><td>${playerCardsString}</td>></tr>`)
+        }
+
+    }
+
+    $('#start-btn').click(function() {
+        let message = {
+            "GameStatus": {
+                "status": "1"
+            }
+        }
+
+        ws.send(JSON.stringify(message));
+    })
+
+    $('#hit-btn').click(function() {
+        let message = {
+          "Decision" : {
+            "action" : {
+                "Hit": {}
+            }
+          }
+        }
+
+        ws.send(JSON.stringify(message));
+    })
+
+    $('#stand-btn').click(function() {
+        let message = {
+          "Decision" : {
+            "action" : {
+                "Stand": {}
+            }
+          }
+        }
+
+        ws.send(JSON.stringify(message));
+    })
+</script>
+</html>

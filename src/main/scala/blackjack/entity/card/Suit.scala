@@ -7,6 +7,12 @@ sealed trait Suit {
 }
 
 object Suit {
+  def of(suit: String): Suit = suit match {
+    case "hearts" => Hearts
+    case "diamonds" => Diamonds
+    case "spades" => Spades
+    case "clubs" => Clubs
+  }
 
   case object Hearts extends Suit {
     override def name: String = "hearts"
