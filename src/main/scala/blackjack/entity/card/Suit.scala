@@ -7,7 +7,7 @@ sealed trait Suit {
 }
 
 object Suit {
-  def of(suit: String): Suit = suit match {
+  def unsafeOf(suit: String): Suit = suit match {
     case "hearts" => Hearts
     case "diamonds" => Diamonds
     case "spades" => Spades

@@ -1,102 +1,101 @@
 package blackjack.entity.game
 
-import blackjack.entity.card.Deck
-import blackjack.entity.player.{Dealer, Hand, Play, Player, Status, Wait}
+import blackjack.entity.card.Card
+import blackjack.entity.player.{BetPlaced, Bust, Dealer, DoubleDown, Hand, Status, Surrender, Turn, Wait}
 import blackjack.server.WebServer.GameState
-import cats.effect.IO
-import cats.effect.concurrent.Ref
 
 import java.util.UUID
 
 object Game {
-  def startGame(refState: Ref[IO, GameState], deck: Deck[IO]): IO[GameState] = {
-    val newGameState = for {
-      gameState <- refState.get
-      (_, players) = gameState
-      cards <- deck.draw(1 + players.size * 2)
-    } yield {
-      var playersCards = cards.tail
-      val (firstId, _) = players.head
+  def startGame(gameState: GameState, cards: List[Card]): GameState = {
+    val (_, players) = gameState
+    var playersCards = cards.tail
+    val (firstId, _) = players.head
 
-      val newPlayers = players.map {
-        case (id, _) =>
-          val playerCards = playersCards.take(2);
-          val player = (id, Player(Hand(playerCards), if (id == firstId) Play else Wait))
+    val newPlayers = players.map {
+      case (id, player) =>
+        val playerCards = playersCards.take(2);
+        val updatedPlayer = (id, player.copy(hand = Hand(playerCards), status = if (id == firstId) Turn else Wait))
 
-          playersCards = playersCards.drop(2)
-
-          player
-      }
-
-      (Dealer(Hand(List(cards.head))), newPlayers)
+        playersCards = playersCards.drop(2)
+        updatedPlayer
     }
 
-    for {
-      newGameState <- newGameState
-      newGameState <- refState.updateAndGet(_ => newGameState)
-    } yield newGameState
+    (Dealer(Hand(List(cards.head))), newPlayers)
   }
 
-  def hit(refState: Ref[IO, GameState], id: UUID, deck: Deck[IO]): IO[GameState] = {
-    val newGameState = for {
-      gameState <- refState.get
-      card <- deck.drawOne
-    } yield {
-      val (dealer, players) = gameState
+  def hit(gameState: GameState, id: UUID, card: Card): GameState = {
+    val (dealer, players) = gameState
 
-      players.get(id) match {
-        case Some(player) if player.status == Play =>
-          (dealer, players + (id -> Player(Hand(player.hand.cards :+ card), player.status)))
-        case _ => gameState
-      }
+    players.get(id) match {
+      case Some(player) if player.status == Turn =>
+        val hand = Hand(player.hand.cards :+ card)
+        val updatedPlayers = players + (id -> player.copy(hand = hand))
+
+        if (hand.isBust) finish((dealer, updatedPlayers), id, Bust) else (dealer, updatedPlayers)
+      case _ => gameState
     }
-
-    for {
-      newGameState <- newGameState
-      newGameState <- refState.updateAndGet(_ => newGameState)
-    } yield newGameState
   }
 
-  def finish(refState: Ref[IO, GameState], id: UUID, status: Status): IO[GameState] = {
-    val newGameState = for {
-      gameState <- refState.get
-    } yield {
-      val (dealer, players) = gameState
+  def finish(gameState: GameState, id: UUID, status: Status): GameState = {
+    val (dealer, players) = gameState
 
-      players.get(id) match {
-        case Some(player) => {
-          val standingPlayer = id -> Player(player.hand, status)
-          val nextPlayer = players.find(player => player._2.status == Wait)
+    players.get(id) match {
+      case Some(player) =>
+        if (player.status == Turn) {
+          val standingPlayer = id -> player.copy(status = status)
 
-          nextPlayer match {
-            case Some((id, player)) => (dealer, players + standingPlayer + (id -> Player(player.hand, Play)))
+          players.find(player => player._2.status == Wait) match {
+            case Some((id, player)) => (dealer, players + standingPlayer + (id -> player.copy(status = Turn)))
             case None => (dealer, players + standingPlayer)
           }
-        }
-        case _ => gameState
-      }
+        } else gameState
+      case _ => gameState
     }
-
-    for {
-      newGameState <- newGameState
-      newGameState <- refState.updateAndGet(_ => newGameState)
-    } yield newGameState
   }
 
-  def dealerDraw(refState: Ref[IO, GameState], deck: Deck[IO]): IO[GameState] = {
-    val newGameState = for {
-      gameState <- refState.get
-      card <- deck.drawOne
-    } yield {
-      val (dealer, players) = gameState
+  def bet(gameState: GameState, id: UUID, amount: Float): GameState = {
+    val (dealer, players) = gameState
 
-      (Dealer(Hand(dealer.hand.cards :+ card)), players)
+    players.get(id) match {
+      case Some(player) =>
+        if (betsOpen(gameState) && player.status != BetPlaced) (dealer, players + (id -> player.copy(status = BetPlaced, balance = player.balance - amount, bet = amount)))
+        else gameState
+      case _ => gameState
     }
-
-    for {
-      newGameState <- newGameState
-      newGameState <- refState.updateAndGet(_ => newGameState)
-      newGameState <- if (newGameState._1.canDraw) dealerDraw(refState, deck) else IO(newGameState)
-    } yield newGameState
   }
+
+  def doubleDown(gameState: GameState, id: UUID, card: Card): GameState = {
+    val (dealer, players) = gameState
+
+    players.get(id) match {
+      case Some(player) if player.status == Turn =>
+        val hand = Hand(player.hand.cards :+ card)
+        val updatedPlayer = player.copy(hand = hand, balance = player.balance - player.bet, bet = player.bet * 2)
+
+        finish((dealer, players + (id -> updatedPlayer)), id, if (hand.isBust) Bust else DoubleDown)
+      case _ => gameState
+    }
+  }
+
+  def surrender(gameState: GameState, id: UUID): GameState = {
+    val (dealer, players) = gameState
+
+    players.get(id) match {
+      case Some(player) if player.status == Turn =>
+        finish((dealer, players + (id -> player.copy(balance = player.balance + player.bet / 2))), id, Surrender)
+      case _ => gameState
+    }
+  }
+
+  def dealerDraw(gameState: GameState, card: Card): GameState = {
+    val (dealer, players) = gameState
+
+    (Dealer(Hand(dealer.hand.cards :+ card)), players)
+  }
+
+  def finished(gameState: GameState): Boolean = gameState._2.forall(_._2.isFinished)
+
+  def betsOpen(gameState: GameState): Boolean =
+    gameState._2.forall(state => state._2.status == BetPlaced || state._2.status == Wait || state._2.isFinished)
 }

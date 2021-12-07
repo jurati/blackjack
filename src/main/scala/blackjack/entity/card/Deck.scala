@@ -14,16 +14,14 @@ trait Deck[F[_]] {
 }
 
 object Deck {
-  def createDeck: List[Card] = {
-    val allCards = for {
-      rank <- Rank.allRanks
-      suit <- Suit.allSuits
-    } yield Card(rank, suit)
+  private val getCardForDeck: List[Card] = for {
+    rank <- Rank.allRanks
+    suit <- Suit.allSuits
+  } yield Card(rank, suit)
 
-    Random.shuffle(List.fill(1)(allCards).flatten)
-  }
+  private def createDeck(): List[Card] = Random.shuffle(List.fill(1)(getCardForDeck).flatten)
 
-  def create: IO[Deck[IO]] = Ref.of[IO, List[Card]](createDeck).map { ref =>
+  def create: IO[Deck[IO]] = Ref.of[IO, List[Card]](createDeck()).map { ref =>
     new Deck[IO] {
       override def draw(count: Int): IO[List[Card]] = for {
         cards <- ref.get

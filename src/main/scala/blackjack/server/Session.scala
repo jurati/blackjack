@@ -9,7 +9,7 @@ case class Session(id: UUID) {
   def connect(state: GameState): GameState = {
     val (dealer, players) = state
 
-    (dealer, players + (id -> Player(Hand(List.empty), Wait)))
+    (dealer, players + (id -> Player(Hand(List.empty), Wait, 500, 0)))
   }
 
   def disconnect(state: GameState): GameState = {

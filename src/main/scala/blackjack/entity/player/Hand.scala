@@ -1,16 +1,29 @@
 package blackjack.entity.player
 
 import blackjack.entity.card.Card
-import blackjack.entity.card.Rank
+import blackjack.entity.card.Rank.Ace
+
+import scala.annotation.tailrec
 
 final case class Hand(cards: List[Card]) {
-  def score: Int = cards.map(_.rank.value).sum
+  val score: Int = getScoreWithAces(cards.map(_.rank.value).sum, cards.count(_.rank == Ace))
 
-  def scoreSoft: Int = cards.map(card => if (card.rank == Rank.Ace) 1 else card.rank.value).sum
+  val isBust: Boolean = score > 21
 
-  def isBust: Boolean = score > 21
+  val isBlackjack: Boolean = score == 21
+
+  def getPayoutRatio(dealerHand: Hand): Float = {
+    if (isBust || dealerHand.isBlackjack || (!dealerHand.isBust) && dealerHand.score > score) 0
+    else if (cards.size == 2 && isBlackjack) 2.5.floatValue()
+    else  2
+  }
 
   def addCard(card: Card): Hand = Hand(cards :+ card)
 
   override def toString: String = cards.mkString(", ")
+
+  @tailrec
+  private def getScoreWithAces(currentScore: Int, highAceCount: Int): Int =
+    if (currentScore > 21 && highAceCount != 0) getScoreWithAces(currentScore - 10, highAceCount - 1)
+    else currentScore
 }

@@ -1,14 +1,14 @@
 package blackjack.server
 
-import blackjack.entity.card.{Card, Deck}
+import blackjack.entity.card.Deck
 import blackjack.entity.game.Action
 import blackjack.entity.game.Game
-import blackjack.entity.player.{Bust, Dealer, Hand, Player, Stand}
-import blackjack.server.ClientMessage.{Decision, GameStatus}
+import blackjack.entity.player.{BetPlaced, Bust, Dealer, Hand, Player, Stand, Surrender, Wait}
+import blackjack.server.ClientMessage.{Bet, Decision, GameStatus}
 import cats.effect.concurrent.Ref
 import cats.effect.{ExitCode, IO, IOApp}
-import fs2.{Pipe, Stream}
-import fs2.concurrent.{Queue, Topic}
+import fs2.Stream
+import fs2.concurrent.Topic
 import io.circe.jawn
 import io.circe.syntax.EncoderOps
 import org.http4s._
@@ -17,7 +17,6 @@ import org.http4s.implicits._
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
-
 import java.util.UUID
 import java.util.UUID.randomUUID
 import scala.concurrent.ExecutionContext
@@ -34,22 +33,73 @@ object WebServer extends IOApp {
     topic <- Topic[IO, GameState](gameState)
   } yield HttpRoutes.of[IO] {
     case GET -> Root / "blackjack" =>
+      def processStartGame(gameState: GameState): IO[GameState] = {
+        if (gameState._2.forall(_._2.status == BetPlaced))
+          deck.draw(1 + gameState._2.size * 2).map(cards => Game.startGame(gameState, cards))
+        else
+          IO(gameState)
+      }
+
+      def processDecisionHit(gameState: GameState, session: Session): IO[GameState] = {
+        gameState._2.get(session.id) match {
+          case Some(player) =>
+            if (player.canHit) deck.drawOne.map(card => Game.hit(gameState, session.id, card))
+            else IO(Game.finish(gameState, session.id, Bust))
+          case None => IO(gameState)
+        }
+      }
+
+      def processDecisionStand(gameState: GameState, session: Session): IO[GameState] =
+        IO(Game.finish(gameState, session.id, Stand))
+
+      def processDecisionDoubleDown(gameState: GameState, session: Session): IO[GameState] =
+        gameState._2.get(session.id) match {
+          case Some(player) =>
+            if (player.canDoubleDown) deck.drawOne.map(card => Game.doubleDown(gameState, session.id, card))
+            else IO(gameState)
+          case None => IO(gameState)
+        }
+
+      def processDecisionSurrender(gameState: GameState, session: Session): IO[GameState] =
+        IO(Game.surrender(gameState, session.id))
+
+      def processBet(gameState: GameState, session: Session, amount: Float): IO[GameState] =
+        IO(Game.bet(gameState, session.id, amount))
+
+      def processDealerTurn(gameState: GameState): IO[GameState] = {
+        if (Game.finished(gameState))
+          if (gameState._1.canDraw) deck.drawOne.map(card => Game.dealerDraw(gameState, card))
+          else processResult(gameState)
+        else
+          IO(gameState)
+      }
+
+      def processResult(gameState: GameState): IO[GameState] = {
+        val (dealer, players) = gameState
+
+        val newPlayers = players.map {
+          case (id, player) if player.status != Surrender =>
+            (id, Player(player.hand, Wait, player.balance + player.bet * player.hand.getPayoutRatio(dealer.hand), 0))
+        }
+
+        IO((dealer, newPlayers))
+      }
+
       def process(message: String, session: Session): IO[GameState] = {
         for {
           gameState <- refState.get
-          newGameState <- {
+          newGameState <-
             jawn.decode[ClientMessage](message) match {
-              case Right(GameStatus(1)) => Game.startGame(refState, deck)
-              case Right(Decision(Action.Hit)) =>
-                if (gameState._2(session.id).canHit) Game.hit(refState, session.id, deck)
-                else Game.finish(refState, session.id, Bust)
-              case Right(Decision(Action.Stand)) => Game.finish(refState, session.id, Stand)
+              case Right(GameStatus(1)) => processStartGame(gameState)
+              case Right(Decision(Action.Hit)) => processDecisionHit(gameState, session)
+              case Right(Decision(Action.Stand)) => processDecisionStand(gameState, session)
+              case Right(Decision(Action.DoubleDown)) => processDecisionDoubleDown(gameState, session)
+              case Right(Decision(Action.Surrender)) => processDecisionSurrender(gameState, session)
+              case Right(Bet(amount)) => processBet(gameState, session, amount)
               case _ => IO(gameState)
             }
-          }
-          newGameState <-
-            if (newGameState._2.forall(_._2.isFinished) && newGameState._1.canDraw) Game.dealerDraw(refState, deck)
-            else IO(newGameState)
+          newGameState <- processDealerTurn(newGameState)
+          newGameState <- refState.updateAndGet(_ => newGameState)
         } yield newGameState
       }
 

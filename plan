@@ -1,0 +1,26 @@
+- Queue todo
+Implement queue instead of topic to be able to send different messages to clients
+
+- Messaging
+Once queue is implemented make some basic communication with the player
+
+- Shuffle deck
+Shuffle deck after each round/when it's 50% done
+
+- Insurence
+If dealer has Ace first allow a side bet 50% of the bet if the dealer busts
+
+- Perfect Pairs
+Implement a side bet for perfect pairs
+
+- Split
+Player should be allowed to split his hand in case of pairs
+
+- Unit tests
+Cover Unit tests
+
+- 21 + 3
+Implement 21+3 side bet feature
+
+- logging
+the least important is to log everything right now, but if I have time I will add this

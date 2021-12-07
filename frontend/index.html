@@ -5,6 +5,11 @@
     <meta name = "viewport" content="width=device-width, initial-scale=1.0">
     <title>WebSockets</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+    <style>
+        #players td, #players th {
+          border: 1px solid black;
+        }
+    </style>
 </head>
 <body>
     <button id="start-btn">Start Game</button>
@@ -15,8 +20,14 @@
         </tr>
     </table>
     <table id="players"></table>
+    <input type="text" id="bet">
+    <button id="bet-btn">Bet</button>
+    <br>
+    <br>
     <button id="hit-btn">Hit</button>
     <button id="stand-btn">Stand</button>
+    <button id="double-btn">Double</button>
+    <button id="surrender-btn">Surrender</button>
 </body>
 <script>
     const ws = new WebSocket("ws://127.0.0.1:9001/blackjack");
@@ -26,7 +37,7 @@
     });
 
     function render(gameState) {
-        $('#players').html('')
+        $('#players').html('<th>State</th><th>Player</th><th>Cards</th><th>Bet</th><th>Balance</th>')
         let state = JSON.parse(gameState);
                 console.log(state);
 
@@ -41,8 +52,11 @@
         for (const [id, player] of Object.entries(players)) {
             let playerCardsString = $.map (player.hand.cards, function(val, i) {
                 return val.rank.symbol + " " + val.suit.name;
-            });
-            $('#players').append(`<tr><td data-uuid='${id}'>${id}</td><td>${playerCardsString}</td>></tr>`)
+            }).join(", ");
+
+            let status = Object.keys(player.status)[0];
+
+            $('#players').append(`<tr><td>${status}</td><td>${id}</td><td>${playerCardsString}</td><td>${player.bet}</td><td>${player.balance}</td></tr>`)
         }
 
     }
@@ -74,6 +88,40 @@
           "Decision" : {
             "action" : {
                 "Stand": {}
+            }
+          }
+        }
+
+        ws.send(JSON.stringify(message));
+    })
+
+    $('#bet-btn').click(function() {
+        let message = {
+            "Bet": {
+                "amount": $("#bet").val()
+            }
+        }
+
+        ws.send(JSON.stringify(message));
+    })
+
+    $('#double-btn').click(function() {
+        let message = {
+          "Decision" : {
+            "action" : {
+                "DoubleDown": {}
+            }
+          }
+        }
+
+        ws.send(JSON.stringify(message));
+    })
+
+    $('#surrender-btn').click(function() {
+        let message = {
+          "Decision" : {
+            "action" : {
+                "Surrender": {}
             }
           }
         }

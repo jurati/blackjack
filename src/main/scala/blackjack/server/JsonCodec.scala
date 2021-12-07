@@ -19,10 +19,10 @@ object JsonCodec {
   implicit val statusMessageCodec: Codec[Status] = deriveCodec[Status]
 
   implicit val rankDecoder: Decoder[Rank] =
-    Decoder.forProduct2("value", "symbol")((_: String, symbol: String) => Rank.of(symbol))
+    Decoder.forProduct2("value", "symbol")((_: String, symbol: String) => Rank.unsafeOf(symbol))
   implicit val rankEncoder: Encoder[Rank] =
     Encoder.forProduct2("value", "symbol")(r => (r.value, r.symbol))
 
-  implicit val suitDecoder: Decoder[Suit] = Decoder.forProduct1("name")(Suit.of)
+  implicit val suitDecoder: Decoder[Suit] = Decoder.forProduct1("name")(Suit.unsafeOf)
   implicit val suitEncoder: Encoder[Suit] = Encoder.forProduct1("name")(_.name)
 }
