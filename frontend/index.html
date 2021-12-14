@@ -28,21 +28,30 @@
     <button id="stand-btn">Stand</button>
     <button id="double-btn">Double</button>
     <button id="surrender-btn">Surrender</button>
+    <div id="message"></div>
 </body>
 <script>
     const ws = new WebSocket("ws://127.0.0.1:9001/blackjack");
 
      ws.addEventListener('message', (event) => {
-        render(event.data);
+        let response = JSON.parse(event.data);
+
+        console.log(response)
+
+        if (response.hasOwnProperty('GameState')) {
+            render(response.GameState.game);
+        }
+
+        if (response.hasOwnProperty('Message')) {
+            $('#message').text(response.Message.text);
+        }
     });
 
-    function render(gameState) {
+    function render(state) {
         $('#players').html('<th>State</th><th>Player</th><th>Cards</th><th>Bet</th><th>Balance</th>')
-        let state = JSON.parse(gameState);
-                console.log(state);
 
-        let dealer = state[0];
-        let players = state[1]
+        let dealer = state.dealer;
+        let players = state.players;
         let dealerCardsString = $.map (dealer.hand.cards, function(val, i) {
             return val.rank.symbol + " " + val.suit.name;
         });
@@ -58,7 +67,6 @@
 
             $('#players').append(`<tr><td>${status}</td><td>${id}</td><td>${playerCardsString}</td><td>${player.bet}</td><td>${player.balance}</td></tr>`)
         }
-
     }
 
     $('#start-btn').click(function() {

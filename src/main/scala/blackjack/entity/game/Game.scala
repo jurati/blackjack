@@ -1,101 +1,127 @@
 package blackjack.entity.game
 
-import blackjack.entity.card.Card
-import blackjack.entity.player.{BetPlaced, Bust, Dealer, DoubleDown, Hand, Status, Surrender, Turn, Wait}
-import blackjack.server.WebServer.GameState
+import blackjack.entity.card.{Card, Deck}
+import blackjack.entity.player.{BetPlaced, Bust, Dealer, DoubleDown, Hand, Player, Status, Surrender, Turn, Wait}
+import blackjack.server.{ServerMessage, Session}
+import blackjack.server.WebServer.MessageQueues
+import cats.effect.{ContextShift, IO}
 
 import java.util.UUID
+import scala.concurrent.ExecutionContext.global
 
-object Game {
-  def startGame(gameState: GameState, cards: List[Card]): GameState = {
-    val (_, players) = gameState
-    var playersCards = cards.tail
-    val (firstId, _) = players.head
+final case class Game(dealer: Dealer, players: Map[UUID, Player]) {
+  implicit val contextShift: ContextShift[IO] = IO.contextShift(global)
 
-    val newPlayers = players.map {
-      case (id, player) =>
-        val playerCards = playersCards.take(2);
-        val updatedPlayer = (id, player.copy(hand = Hand(playerCards), status = if (id == firstId) Turn else Wait))
+  val finished: Boolean = players.forall(_._2.isFinished)
 
-        playersCards = playersCards.drop(2)
-        updatedPlayer
+  val betsOpen: Boolean = players.forall(state => state._2.isBetPlaced || state._2.isWaiting || state._2.isFinished)
+
+  val canStart: Boolean = players.forall(_._2.isBetPlaced)
+
+  def start(deck: Deck[IO], messageQueues: MessageQueues): IO[Game] = {
+    if (canStart) for {
+      _ <- ServerMessage.sendMessage("Game started. Good Luck!", messageQueues)
+      cards <- deck.draw(1 + players.size * 2)
+      (firstId, _) = players.head
+    } yield {
+      var playersCards = cards.tail
+
+      val newPlayers = players.map {
+        case (id, player) =>
+          val playerCards = playersCards.take(2)
+          val updatedPlayer = (id, player.copy(hand = Hand(playerCards), status = if (id == firstId) Turn else Wait))
+
+          playersCards = playersCards.drop(2)
+          updatedPlayer
+      }
+
+      Game(Dealer(Hand(List(cards.head))), newPlayers)
     }
-
-    (Dealer(Hand(List(cards.head))), newPlayers)
+    else IO(this)
   }
 
-  def hit(gameState: GameState, id: UUID, card: Card): GameState = {
-    val (dealer, players) = gameState
-
-    players.get(id) match {
-      case Some(player) if player.status == Turn =>
-        val hand = Hand(player.hand.cards :+ card)
-        val updatedPlayers = players + (id -> player.copy(hand = hand))
-
-        if (hand.isBust) finish((dealer, updatedPlayers), id, Bust) else (dealer, updatedPlayers)
-      case _ => gameState
+  def hit(session: Session, deck: Deck[IO], messageQueues: MessageQueues): IO[Game] = {
+    players.get(session.id) match {
+      case Some(player) if player.isTurn =>
+        if (player.canHit) for {
+          card <- deck.drawOne
+          hand = player.hand.addCard(card)
+          gameAfterHit = copy(players = players + (session.id -> player.copy(hand = hand)))
+          updatedGame <- if (hand.isBust) gameAfterHit.finish(session.id, Bust, messageQueues) else IO(gameAfterHit)
+        } yield updatedGame
+        else finish(session.id, Bust, messageQueues)
+      case _ => IO(this)
     }
   }
 
-  def finish(gameState: GameState, id: UUID, status: Status): GameState = {
-    val (dealer, players) = gameState
-
+  def finish(id: UUID, status: Status, messageQueues: MessageQueues): IO[Game] = {
     players.get(id) match {
       case Some(player) =>
-        if (player.status == Turn) {
-          val standingPlayer = id -> player.copy(status = status)
+        ServerMessage.sendMessage(s"Score: ${player.hand.score}. Status: ${status}" , messageQueues, Some(id)) *> IO {
+          if (player.isTurn) {
+            val finishedPlayer = id -> player.copy(status = status)
 
-          players.find(player => player._2.status == Wait) match {
-            case Some((id, player)) => (dealer, players + standingPlayer + (id -> player.copy(status = Turn)))
-            case None => (dealer, players + standingPlayer)
+            players.find(player => player._2.isWaiting) match {
+              case Some((id, player)) => copy(players = players + finishedPlayer + (id -> player.copy(status = Turn)))
+              case _ => copy(players = players + finishedPlayer)
+            }
+          } else {
+            this
           }
-        } else gameState
-      case _ => gameState
+        }
+      case _ => IO(this)
     }
   }
 
-  def bet(gameState: GameState, id: UUID, amount: Float): GameState = {
-    val (dealer, players) = gameState
-
+  def bet(id: UUID, amount: Float): IO[Game] = IO {
     players.get(id) match {
-      case Some(player) =>
-        if (betsOpen(gameState) && player.status != BetPlaced) (dealer, players + (id -> player.copy(status = BetPlaced, balance = player.balance - amount, bet = amount)))
-        else gameState
-      case _ => gameState
+      case Some(player) if (this.betsOpen && !player.isBetPlaced) => copy(players = players + (id -> player.copy(status = BetPlaced, balance = player.balance - amount, bet = amount)))
+      case _ => this
     }
   }
 
-  def doubleDown(gameState: GameState, id: UUID, card: Card): GameState = {
-    val (dealer, players) = gameState
-
+  def doubleDown(id: UUID, deck: Deck[IO], messageQueues: MessageQueues): IO[Game] = {
     players.get(id) match {
-      case Some(player) if player.status == Turn =>
-        val hand = Hand(player.hand.cards :+ card)
-        val updatedPlayer = player.copy(hand = hand, balance = player.balance - player.bet, bet = player.bet * 2)
-
-        finish((dealer, players + (id -> updatedPlayer)), id, if (hand.isBust) Bust else DoubleDown)
-      case _ => gameState
+      case Some(player) if player.isTurn && player.canDoubleDown => for {
+        card <- deck.drawOne
+        hand = player.hand.addCard(card)
+        updatedPlayer = player.copy(hand = hand, balance = player.balance - player.bet, bet = player.bet * 2)
+        game <- copy(players = players + (id -> updatedPlayer)).finish(id, if (hand.isBust) Bust else DoubleDown, messageQueues)
+      } yield game
+      case _ => IO(this)
     }
   }
 
-  def surrender(gameState: GameState, id: UUID): GameState = {
-    val (dealer, players) = gameState
-
+  def surrender(id: UUID, messageQueues: MessageQueues): IO[Game] = {
     players.get(id) match {
-      case Some(player) if player.status == Turn =>
-        finish((dealer, players + (id -> player.copy(balance = player.balance + player.bet / 2))), id, Surrender)
-      case _ => gameState
+      case Some(player) if player.isTurn => copy(players = players + (id -> player.copy(balance = player.balance + player.bet / 2))).finish(id, Surrender, messageQueues)
+      case _ => IO(this)
     }
   }
 
-  def dealerDraw(gameState: GameState, card: Card): GameState = {
-    val (dealer, players) = gameState
+  def dealerDraw(card: Card): Game = copy(dealer = dealer.copy(hand = dealer.hand.addCard(card)))
 
-    (Dealer(Hand(dealer.hand.cards :+ card)), players)
+  def turn(deck: Deck[IO], messageQueues: MessageQueues): IO[Game] = {
+    if (finished)
+      if (dealer.canDraw) for {
+        card <- deck.drawOne
+        game <- dealerDraw(card).turn(deck, messageQueues)
+      } yield game
+      else processResult
+    else
+      players.find(_._2.isTurn) match {
+        case Some((id, player)) => ServerMessage.sendMessage(s"You have ${player.hand.score}. What will you do?" , messageQueues, Some(id)) *> IO(this)
+        case None => IO(this)
+      }
   }
 
-  def finished(gameState: GameState): Boolean = gameState._2.forall(_._2.isFinished)
+  def processResult: IO[Game] = {
+    val updatedPlayers = players.map {
+      case (id, player) =>
+        if (player.status != Surrender) (id, Player(player.hand, Wait, player.balance + player.bet * player.hand.getPayoutRatio(dealer.hand), 0))
+        else (id, player)
+    }
 
-  def betsOpen(gameState: GameState): Boolean =
-    gameState._2.forall(state => state._2.status == BetPlaced || state._2.status == Wait || state._2.isFinished)
+    IO(copy(players = updatedPlayers))
+  }
 }

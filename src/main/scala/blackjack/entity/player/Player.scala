@@ -21,4 +21,10 @@ final case class Player(hand: Hand, status: Status, balance: Float, bet: Float) 
   val isFinished: Boolean = status.isInstanceOf[Finish]
 
   val isPlaying: Boolean = status.isInstanceOf[Play]
+
+  val isTurn: Boolean = status == Turn
+
+  val isWaiting: Boolean = status == Wait
+
+  val isBetPlaced: Boolean = status == BetPlaced
 }

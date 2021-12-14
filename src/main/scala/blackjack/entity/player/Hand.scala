@@ -23,7 +23,5 @@ final case class Hand(cards: List[Card]) {
   override def toString: String = cards.mkString(", ")
 
   @tailrec
-  private def getScoreWithAces(currentScore: Int, highAceCount: Int): Int =
-    if (currentScore > 21 && highAceCount != 0) getScoreWithAces(currentScore - 10, highAceCount - 1)
-    else currentScore
+  private def getScoreWithAces(currentScore: Int, highAceCount: Int): Int = if (currentScore > 21 && highAceCount != 0) getScoreWithAces(currentScore - 10, highAceCount - 1) else currentScore
 }

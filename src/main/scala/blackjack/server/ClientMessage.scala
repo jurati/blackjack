@@ -8,4 +8,5 @@ object ClientMessage {
   final case class GameStatus(status: Int) extends ClientMessage
   final case class Decision(action: Action) extends ClientMessage
   final case class Bet(amount: Float) extends ClientMessage
+  final case class Message(text: String) extends ClientMessage
 }
