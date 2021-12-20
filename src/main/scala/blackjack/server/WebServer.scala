@@ -8,7 +8,7 @@ import blackjack.server.ServerMessage.GameState
 import cats.effect.concurrent.Ref
 import cats.effect.{ExitCode, IO, IOApp}
 import fs2.Stream
-import fs2.concurrent.{Queue}
+import fs2.concurrent.Queue
 import io.circe.jawn
 import io.circe.syntax.EncoderOps
 import org.http4s._
@@ -34,7 +34,7 @@ object WebServer extends IOApp {
     deck <- Deck.create
   } yield HttpRoutes.of[IO] {
     case GET -> Root / "blackjack" =>
-      def process(gameState: Game, clientMessage: ClientMessage, session: Session): IO[Game] =
+      def process(gameState: Game, clientMessage: ClientMessage, session: Session): IO[Game] = {
         for {
           messageQueues <- refMessageQueues.get
           gameStateAfterDecision <- clientMessage match {
@@ -43,11 +43,13 @@ object WebServer extends IOApp {
             case Decision(Action.Stand) => gameState.finish(session.id, Stand, messageQueues)
             case Decision(Action.DoubleDown) => gameState.doubleDown(session.id, deck, messageQueues)
             case Decision(Action.Surrender) => gameState.surrender(session.id, messageQueues)
+            case Decision(Action.Split) => gameState.split(session.id, deck)
             case Bet(amount) => gameState.bet(session.id, amount)
           }
           newGameState <- gameStateAfterDecision.turn(deck, messageQueues)
           _ <- ServerMessage.updateGameState(newGameState, messageQueues)
-        } yield  newGameState
+        } yield newGameState
+      }
 
       for {
         queue <- Queue.unbounded[IO, ServerMessage]
@@ -56,7 +58,6 @@ object WebServer extends IOApp {
           receive = queue.enqueue.compose[Stream[IO, WebSocketFrame]](_.collect {
             case WebSocketFrame.Text(message, _) => message
           }.evalMap { message => jawn.decode[ClientMessage](message) match {
-            case Right(ClientMessage.Message(text)) => IO(ServerMessage.Message(text))
             case Right(clientMessage) => for {
               game <- refGame.get
               queues <- refMessageQueues.get

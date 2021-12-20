@@ -7,4 +7,5 @@ object Action {
   case object Stand extends Action
   case object DoubleDown extends Action
   case object Surrender extends Action
+  case object Split extends Action
 }

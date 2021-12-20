@@ -2,7 +2,7 @@ package blackjack.server
 
 import blackjack.entity.card.{Card, Rank, Suit}
 import blackjack.entity.game.{Action, Game}
-import blackjack.entity.player.{Dealer, Hand, Player, Status}
+import blackjack.entity.player.{Dealer, Hand, HandStatus, Player, Status}
 import blackjack.server.ClientMessage.{Decision, GameStatus}
 import io.circe.{Codec, Decoder, Encoder}
 import io.circe.generic.semiauto.deriveCodec
@@ -17,6 +17,7 @@ object JsonCodec {
   implicit val gameStatusCodec: Codec[GameStatus] = deriveCodec[GameStatus]
   implicit val clientMessageCodec: Codec[ClientMessage] = deriveCodec[ClientMessage]
   implicit val statusCodec: Codec[Status] = deriveCodec[Status]
+  implicit val handStatusCodec: Codec[HandStatus] = deriveCodec[HandStatus]
   implicit val gameCodec: Codec[Game] = deriveCodec[Game]
   implicit val serverMessageCodec: Codec[ServerMessage] = deriveCodec[ServerMessage]
 

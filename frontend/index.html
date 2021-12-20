@@ -28,6 +28,7 @@
     <button id="stand-btn">Stand</button>
     <button id="double-btn">Double</button>
     <button id="surrender-btn">Surrender</button>
+    <button id="split-btn">Split</button>
     <div id="message"></div>
 </body>
 <script>
@@ -43,12 +44,14 @@
         }
 
         if (response.hasOwnProperty('Message')) {
-            $('#message').text(response.Message.text);
+            $('#message').append(response.Message.text);
+            $('#message').append("<br>");
         }
     });
 
     function render(state) {
-        $('#players').html('<th>State</th><th>Player</th><th>Cards</th><th>Bet</th><th>Balance</th>')
+        $('#players').html('<th>Player Status</th><th>Hand Status</th><th>Player</th><th>Cards</th><th>Bet</th><th>Balance</th>')
+        console.log($('#players').html())
 
         let dealer = state.dealer;
         let players = state.players;
@@ -59,13 +62,16 @@
         $('#dealer-cards').text(dealerCardsString.join(", "))
 
         for (const [id, player] of Object.entries(players)) {
-            let playerCardsString = $.map (player.hand.cards, function(val, i) {
-                return val.rank.symbol + " " + val.suit.name;
-            }).join(", ");
+            for (const [key, hand] of Object.entries(player.hands)) {
+                let cardsString = $.map (hand.cards, function(val, i) {
+                    return val.rank.symbol + " " + val.suit.name;
+                }).join(", ");
 
-            let status = Object.keys(player.status)[0];
+                let handStatus = Object.keys(hand.status)[0];
+                let playerStatus = Object.keys(player.status)[0];
 
-            $('#players').append(`<tr><td>${status}</td><td>${id}</td><td>${playerCardsString}</td><td>${player.bet}</td><td>${player.balance}</td></tr>`)
+                $('#players').append(`<tr><td>${playerStatus}</td><td>${handStatus}</td><td>${id}</td><td>${cardsString}</td><td>${player.bet}</td><td>${player.balance}</td></tr>`)
+            }
         }
     }
 
@@ -130,6 +136,18 @@
           "Decision" : {
             "action" : {
                 "Surrender": {}
+            }
+          }
+        }
+
+        ws.send(JSON.stringify(message));
+    })
+
+    $('#split-btn').click(function() {
+        let message = {
+          "Decision" : {
+            "action" : {
+                "Split": {}
             }
           }
         }
