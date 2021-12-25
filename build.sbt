@@ -9,6 +9,7 @@ val http4sVersion = "0.21.22"
 val catsEffectVersion = "2.2.0"
 val log4CatsVersion = "1.1.1"
 val circeVersion = "0.13.0"
+val scalaTestVersion = "3.2.7.0"
 
 libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-core" % catsVersion,
@@ -22,4 +23,7 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-generic" % circeVersion,
   "io.circe" %% "circe-generic-extras" % circeVersion,
   "io.circe" %% "circe-parser" % circeVersion,
+  "org.scalatestplus" %% "scalacheck-1-15" % scalaTestVersion % Test,
+  "org.scalatestplus" %% "selenium-3-141" % scalaTestVersion % Test,
+  "com.codecommit" %% "cats-effect-testing-scalatest" % "0.4.1" % Test,
 )

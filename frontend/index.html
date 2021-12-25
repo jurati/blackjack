@@ -37,21 +37,19 @@
      ws.addEventListener('message', (event) => {
         let response = JSON.parse(event.data);
 
-        console.log(response)
 
         if (response.hasOwnProperty('GameState')) {
             render(response.GameState.game);
         }
 
-        if (response.hasOwnProperty('Message')) {
-            $('#message').append(response.Message.text);
+        if (response.hasOwnProperty('Message') && $('#message p').last().text() != response.Message.text) {
+            $('#message').append("<p>" + response.Message.text +  "</p>");
             $('#message').append("<br>");
         }
     });
 
     function render(state) {
         $('#players').html('<th>Player Status</th><th>Hand Status</th><th>Player</th><th>Cards</th><th>Bet</th><th>Balance</th>')
-        console.log($('#players').html())
 
         let dealer = state.dealer;
         let players = state.players;

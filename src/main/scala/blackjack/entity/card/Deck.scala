@@ -9,8 +9,6 @@ trait Deck[F[_]] {
   def draw(count: Int): F[List[Card]]
 
   def drawOne: F[Card]
-
-  def get: F[List[Card]]
 }
 
 object Deck {
@@ -19,7 +17,7 @@ object Deck {
     suit <- Suit.allSuits
   } yield Card(rank, suit)
 
-  private def createDeck(): List[Card] = Random.shuffle(List.fill(1)(getCardForDeck).flatten)
+  private def createDeck(): List[Card] = Random.shuffle(List.fill(6)(getCardForDeck).flatten)
 
   def create: IO[Deck[IO]] = Ref.of[IO, List[Card]](createDeck()).map { ref =>
     new Deck[IO] {
@@ -27,8 +25,6 @@ object Deck {
         cards <- ref.get
         _ <- ref.update(_.drop(count))
       } yield cards.take(count)
-
-      override def get: IO[List[Card]] = ref.get
 
       override def drawOne: IO[Card] = for {
         cards <- draw(1)

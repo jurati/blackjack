@@ -34,11 +34,11 @@ final case class Hand(cards: List[Card], status: HandStatus = Waiting) {
 
   val isSurrender: Boolean = status == Surrender
 
-  val canSplit: Boolean = true
+  val canSplit: Boolean = cards.size == 2 && cards.map(_.rank.value).distinct.length == 1
 
   def getPayoutRatio(dealerHand: Hand): Float = {
     if (isSurrender) 0.5.floatValue()
-    else if (isBust || dealerHand.isBlackjack || (!dealerHand.isBust) && dealerHand.score > score) 0
+    else if (isBust || dealerHand.isBlackjack || (!dealerHand.isBust && dealerHand.score > score)) 0
     else if (isBlackjack) 2.5.floatValue()
     else if (dealerHand.score == score) 1
     else  2

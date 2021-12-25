@@ -41,19 +41,18 @@ final case class Game(dealer: Dealer, players: Map[UUID, Player]) {
     else
       IO(this)
 
-
-  def hit(session: Session, deck: Deck[IO], messageQueues: MessageQueues): IO[Game] = {
-    players.get(session.id) match {
+  def hit(id: UUID, deck: Deck[IO], messageQueues: MessageQueues): IO[Game] = {
+    players.get(id) match {
       case Some(player) if player.isTurn =>
         player.currentHand match {
           case Some((key, hand)) =>
             if (hand.canHit) for {
               card <- deck.drawOne
               currentHand = hand.addCard(card)
-              game = copy(players = players + (session.id -> player.copy(hands = player.hands + (key -> currentHand))))
-              updatedGame <- if (currentHand.isBust) game.finish(session.id, Bust, messageQueues) else IO(game)
+              game = copy(players = players + (id -> player.copy(hands = player.hands + (key -> currentHand))))
+              updatedGame <- if (currentHand.isBust) game.finish(id, Bust, messageQueues) else IO(game)
             } yield updatedGame
-            else finish(session.id, Bust, messageQueues)
+            else finish(id, Bust, messageQueues)
           case _ => IO(this)
         }
       case _ => IO(this)
@@ -169,7 +168,7 @@ final case class Game(dealer: Dealer, players: Map[UUID, Player]) {
   def processResult: IO[Game] = {
     val updatedPlayers = players.map {
       case (id, player) =>
-        val win = player.balance + player.bet * player.hands.map(_._2.getPayoutRatio(dealer.hand)).sum
+        val win = player.bet * player.hands.map(_._2.getPayoutRatio(dealer.hand)).sum
 
         (id, player.copy(status = Wait, balance = player.balance + win))
     }

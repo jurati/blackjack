@@ -28,7 +28,7 @@ object WebServer extends IOApp {
   type MessageQueue = Queue[IO, ServerMessage]
   type MessageQueues = Map[UUID, MessageQueue]
 
-  private val httpApp: IO[HttpApp[IO]] = for {
+  val httpApp: IO[HttpApp[IO]] = for {
     refGame <- Ref.of[IO, Game]( Game(Dealer(Hand(List.empty)), Map.empty))
     refMessageQueues <- Ref.of[IO, MessageQueues](Map.empty)
     deck <- Deck.create
@@ -39,7 +39,7 @@ object WebServer extends IOApp {
           messageQueues <- refMessageQueues.get
           gameStateAfterDecision <- clientMessage match {
             case GameStatus(1) => gameState.start(deck, messageQueues)
-            case Decision(Action.Hit) => gameState.hit(session, deck, messageQueues)
+            case Decision(Action.Hit) => gameState.hit(session.id, deck, messageQueues)
             case Decision(Action.Stand) => gameState.finish(session.id, Stand, messageQueues)
             case Decision(Action.DoubleDown) => gameState.doubleDown(session.id, deck, messageQueues)
             case Decision(Action.Surrender) => gameState.surrender(session.id, messageQueues)
