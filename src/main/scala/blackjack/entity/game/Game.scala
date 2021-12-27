@@ -63,23 +63,23 @@ final case class Game(dealer: Dealer, players: Map[UUID, Player]) {
     players.get(id) match {
       case Some(player) =>
         player.currentHand match {
-          case Some((currentHandKey, hand)) =>
+          case Some((currentHandKey, currentHand)) =>
             val message = ServerMessage.sendMessage(
-              s"Score: ${hand.score}. Status: ${status}",
+              s"Score: ${currentHand.score}. Status: ${status}",
               messageQueues,
               Some(id)
             );
 
             message *> IO {
-              player.nextHand match {
-                case Some((nextHandKey, hand)) =>
-                  val currentHand = currentHandKey -> hand.copy(status = status)
-                  val nextHand = nextHandKey -> hand.copy(status = Current)
+              val ch = currentHandKey -> currentHand.copy(status = status)
 
-                  copy(players = players + (id -> player.copy(hands = player.hands + currentHand + nextHand)))
+              player.nextHand match {
+                case Some((nextHandKey, nextHand)) =>
+                  val nh = nextHandKey -> nextHand.copy(status = Current)
+
+                  copy(players = players + (id -> player.copy(hands = player.hands + ch + nh)))
                 case None =>
-                  val currentHand = currentHandKey -> hand.copy(status = status)
-                  val finishedPlayer = id -> player.copy(status = Finished, hands = player.hands + currentHand)
+                  val finishedPlayer = id -> player.copy(status = Finished, hands = player.hands + ch)
 
                   players.find(player => player._2.isWaiting) match {
                     case Some((id, player)) =>
@@ -168,9 +168,9 @@ final case class Game(dealer: Dealer, players: Map[UUID, Player]) {
   def processResult: IO[Game] = {
     val updatedPlayers = players.map {
       case (id, player) =>
-        val win = player.bet * player.hands.map(_._2.getPayoutRatio(dealer.hand)).sum
+        val win = (player.bet / player.hands.size) * player.hands.map(_._2.getPayoutRatio(dealer.hand)).sum
 
-        (id, player.copy(status = Wait, balance = player.balance + win))
+        (id, player.copy(status = Wait, balance = player.balance + win, bet = 0))
     }
 
     IO(copy(players = updatedPlayers))

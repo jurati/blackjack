@@ -1,7 +1,7 @@
 package blackjack.entity.card
 
 sealed trait Suit {
-  def name: String
+  val name: String
 
   override def toString: String = name
 }
@@ -15,19 +15,19 @@ object Suit {
   }
 
   case object Hearts extends Suit {
-    override def name: String = "hearts"
+    override val name: String = "hearts"
   }
 
   case object Diamonds extends Suit {
-    override def name: String = "diamonds"
+    override val name: String = "diamonds"
   }
 
   case object Spades extends Suit {
-    override def name: String = "spades"
+    override val name: String = "spades"
   }
 
   case object Clubs extends Suit {
-    override def name: String = "clubs"
+    override val name: String = "clubs"
   }
 
   def allSuits: List[Suit] = List(Hearts, Diamonds, Clubs, Spades)
