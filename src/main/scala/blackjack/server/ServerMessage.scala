@@ -16,7 +16,8 @@ object ServerMessage {
 
   implicit val contextShift: ContextShift[IO] = IO.contextShift(global)
 
-  def updateGameState(game: Game, messageQueues: MessageQueues): IO[Unit] = messageQueues.map(_._2.enqueue1(ServerMessage.GameState(game))).toVector.parSequence.void
+  def updateGameState(game: Game, messageQueues: MessageQueues): IO[Unit] =
+    messageQueues.map(_._2.enqueue1(ServerMessage.GameState(game))).toVector.parSequence.void
 
   def sendMessage(message: String, messageQueues: MessageQueues, id: Option[UUID] = None): IO[Unit] = {
     val serverMessage = ServerMessage.Message(message)

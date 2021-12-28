@@ -8,8 +8,10 @@ import java.util.UUID
 
 case class Session(id: UUID) {
   def connect(state: Game, queues: MessageQueues, queue: MessageQueue): (Game, MessageQueues) =
-    if (!connected(state)) (state.copy(players = state.players + (id -> Player(Map.empty, Wait, 500, 0))), queues + (id -> queue))
-    else (state, queues)
+    if (!connected(state))
+      (state.copy(players = state.players + (id -> Player(Map.empty, Wait, 500, 0))), queues + (id -> queue))
+    else
+      (state, queues)
 
   def disconnectFromGame(state: Game): Game = state.copy(players = state.players - id)
 

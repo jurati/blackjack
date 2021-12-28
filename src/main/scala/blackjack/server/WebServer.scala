@@ -40,7 +40,7 @@ object WebServer extends IOApp {
           gameStateAfterDecision <- clientMessage match {
             case GameStatus(1) => gameState.start(deck, messageQueues)
             case Decision(Action.Hit) => gameState.hit(session.id, deck, messageQueues)
-            case Decision(Action.Stand) => gameState.finish(session.id, Stand, messageQueues)
+            case Decision(Action.Stand) => gameState.stand(session.id, Stand, messageQueues)
             case Decision(Action.DoubleDown) => gameState.doubleDown(session.id, deck, messageQueues)
             case Decision(Action.Surrender) => gameState.surrender(session.id, messageQueues)
             case Decision(Action.Split) => gameState.split(session.id, deck)

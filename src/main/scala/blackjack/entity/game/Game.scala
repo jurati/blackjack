@@ -59,6 +59,12 @@ final case class Game(dealer: Dealer, players: Map[UUID, Player]) {
     }
   }
 
+  def stand(id: UUID, status: HandStatus, messageQueues: MessageQueues): IO[Game] =
+    players.get(id) match {
+      case Some(player) if player.isTurn => finish(id, status, messageQueues)
+      case _ => IO(this)
+    }
+
   def finish(id: UUID, status: HandStatus, messageQueues: MessageQueues): IO[Game] = {
     players.get(id) match {
       case Some(player) =>
